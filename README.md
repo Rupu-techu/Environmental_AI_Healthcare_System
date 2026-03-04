@@ -3,8 +3,11 @@
 ## Our Website Demo
 
 <p align="center">
-  <a href="https://drive.google.com/file/d/1VmDExKHBxS2pdVi3bIv3-bacg2WeTGnq/view?usp=drive_link"target="_blank">
-    <b>▶️ Watch Demo Video</b>
+  <a href="https://drive.google.com/file/d/1VmDExKHBxS2pdVi3bIv3-bacg2WeTGnq/view?usp=drive_link" 
+     style="background-color: #4CAF50; color: white; padding: 12px 24px; text-align: center; 
+            text-decoration: none; display: inline-block; font-size: 18px; border-radius: 8px; 
+            font-weight: bold;">
+    ▶️ Watch Demo Video
   </a>
 </p>
 
