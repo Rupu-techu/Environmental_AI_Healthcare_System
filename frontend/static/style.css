@@ -344,6 +344,33 @@ button:hover {
   white-space: pre-wrap;
 }
 
+.followup-history {
+  margin-top: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.qa-item {
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(12, 111, 178, 0.18);
+  background: rgba(255, 255, 255, 0.62);
+  padding: 14px 16px;
+}
+
+.qa-item p {
+  margin: 0 0 8px;
+  color: var(--text);
+}
+
+.qa-item p:last-child {
+  margin-bottom: 0;
+}
+
+.qa-item .qa-a {
+  white-space: pre-wrap;
+  color: var(--muted);
+}
+
 #downloadBtn {
   margin-top: 14px;
 }

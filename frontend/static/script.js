@@ -1,5 +1,6 @@
 let currentEnvironmentClass = null;
 let latestReportData = null;
+let followupHistory = [];
 
 const labels = {
   stagnant_water: "Stagnant Water",
@@ -17,6 +18,22 @@ const badgeColors = {
 
 function byId(id) {
   return document.getElementById(id);
+}
+
+async function parseJsonOrError(response) {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    try {
+      return await response.json();
+    } catch (_error) {
+      return { error: "Server returned invalid JSON." };
+    }
+  }
+
+  const text = await response.text();
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  return { error: cleaned ? cleaned.slice(0, 300) : "Server returned a non-JSON error response." };
 }
 
 function ensureToastWrap() {
@@ -83,22 +100,113 @@ function renderList(elementId, items) {
     list.appendChild(li);
   });
 }
-async function analyze() {
-  const input = byId("imageInput");
-  // Clear previous outputs when a new image is selected
-input.addEventListener("change", () => {
+
+function renderFollowupHistory() {
+  const historyEl = byId("followupHistory");
+  const answerBox = byId("answer");
+  if (!historyEl) return;
+
+  historyEl.innerHTML = "";
+
+  if (!followupHistory.length) {
+    historyEl.hidden = true;
+    if (answerBox) {
+      answerBox.hidden = false;
+      answerBox.textContent = "AI answer will appear here after analysis.";
+    }
+    return;
+  }
+
+  followupHistory.forEach((item, index) => {
+    const block = document.createElement("article");
+    block.className = "qa-item";
+
+    const q = document.createElement("p");
+    const qLabel = document.createElement("strong");
+    qLabel.textContent = "Question: ";
+    q.appendChild(qLabel);
+    q.appendChild(document.createTextNode(item.question));
+
+    const a = document.createElement("p");
+    a.className = "qa-a";
+    a.appendChild(document.createTextNode(formatAnswerForHistory(item.answer)));
+
+    block.appendChild(q);
+    block.appendChild(a);
+    historyEl.appendChild(block);
+  });
+
+  historyEl.hidden = false;
+  if (answerBox) answerBox.hidden = true;
+}
+
+function formatAnswerForHistory(answerText) {
+  const text = (answerText || "").trim();
+  if (!text) return "No answer generated.";
+
+  const lines = text.split(/\r?\n/);
+  const cleaned = [];
+  let insideAnswerBlock = false;
+
+  for (const line of lines) {
+    const normalized = line.trim().toLowerCase();
+    if (!normalized) continue;
+    if (normalized === "question:" || normalized === "summary:") continue;
+    if (normalized.startsWith("user question:")) continue;
+    if (normalized === "answer:") {
+      insideAnswerBlock = true;
+      continue;
+    }
+    if (!insideAnswerBlock && !line.trim().startsWith("-")) {
+      continue;
+    }
+    if (line.toLowerCase().includes("for your question on")) {
+      continue;
+    }
+    cleaned.push(line);
+  }
+
+  return cleaned.join("\n").trim() || "No answer generated.";
+}
+
+function resetAnalysisUI() {
+  const preview = byId("preview");
+  const predictionBadge = byId("predictionBadge");
+  const confidence = byId("confidence");
+  const confidenceBar = byId("confidenceBar");
+  const resultsSection = byId("results");
+  const followupSection = byId("followupSection");
+  const answer = byId("answer");
+  const questionInput = byId("question");
+
   if (preview) preview.src = "";
-  if (predictionBadge) predictionBadge.innerText = "Pending";
-  if (confidence) confidence.innerText = "0%";
+  if (predictionBadge) {
+    predictionBadge.className = "badge";
+    predictionBadge.textContent = "Pending";
+  }
+  if (confidence) confidence.textContent = "0%";
   if (confidenceBar) confidenceBar.style.width = "0%";
-  if (diseasesList) diseasesList.innerHTML = "";
-  if (preventionList) preventionList.innerHTML = "";
-  if (guidelinesList) guidelinesList.innerHTML = "";
+
+  renderList("diseases", []);
+  renderList("prevention", []);
+  renderList("guidelines", []);
+  followupHistory = [];
+  renderFollowupHistory();
+
+  if (answer) answer.textContent = "AI answer will appear here after analysis.";
+  if (answer) answer.hidden = false;
+  if (questionInput) questionInput.value = "";
   if (resultsSection) resultsSection.hidden = true;
   if (followupSection) followupSection.hidden = true;
-});
+}
+
+async function analyze(event) {
+  if (event) event.preventDefault();
+  const input = byId("imageInput");
   const analyzeBtn = byId("analyzeBtn");
   const preview = byId("preview");
+  const resultsSection = byId("results");
+  const followupSection = byId("followupSection");
 
   if (!input) return;
 
@@ -110,16 +218,7 @@ input.addEventListener("change", () => {
 
   analyzeBtn.disabled = true;
   analyzeBtn.textContent = "Analyzing...";
-  // CLEAR PREVIOUS RESULTS
-if (preview) preview.src = "";
-if (predictionBadge) predictionBadge.innerText = "Pending";
-if (confidence) confidence.innerText = "0%";
-if (confidenceBar) confidenceBar.style.width = "0%";
-if (diseasesList) diseasesList.innerHTML = "";
-if (preventionList) preventionList.innerHTML = "";
-if (guidelinesList) guidelinesList.innerHTML = "";
-if (resultsSection) resultsSection.hidden = true;
-if (followupSection) followupSection.hidden = true;
+  resetAnalysisUI();
 
   const formData = new FormData();
   formData.append("image", file);
@@ -136,7 +235,7 @@ if (followupSection) followupSection.hidden = true;
       body: formData
     });
 
-    const data = await response.json();
+    const data = await parseJsonOrError(response);
 
     if (!response.ok) {
       showToast(data.error || "Failed to analyze image.", "error");
@@ -145,33 +244,11 @@ if (followupSection) followupSection.hidden = true;
 
     currentEnvironmentClass = data.prediction;
     latestReportData = data;
-    // UPDATE NEW RESULTS
-if (preview && localPreviewUrl) preview.src = localPreviewUrl;
+    followupHistory = [];
+    renderFollowupHistory();
 
-if (predictionBadge) predictionBadge.innerText = data.prediction || "Unknown";
-
-if (confidence && confidenceBar) {
-  const confPercent = Math.round(data.confidence || 0);
-  confidence.innerText = confPercent + "%";
-  confidenceBar.style.width = confPercent + "%";
-}
-
-if (diseasesList) diseasesList.innerHTML = (data.diseases || []).map(d => `<li>${d}</li>`).join("");
-if (preventionList) preventionList.innerHTML = (data.prevention || []).map(p => `<li>${p}</li>`).join("");
-if (guidelinesList) guidelinesList.innerHTML = (data.guidelines || []).map(g => `<li>${g}</li>`).join("");
-
-// Show the results and follow-up sections
-if (resultsSection) resultsSection.hidden = false;
-if (followupSection) followupSection.hidden = false;
-
-// Re-enable the button
-analyzeBtn.disabled = false;
-analyzeBtn.textContent = "Analyze Environment";
-
-    const results = byId("results");
-    const followup = byId("followupSection");
-    if (results) results.hidden = false;
-    if (followup) followup.hidden = false;
+    if (resultsSection) resultsSection.hidden = false;
+    if (followupSection) followupSection.hidden = false;
 
     if (preview) {
       preview.src = `/uploads/${data.image}?t=${Date.now()}`;
@@ -221,7 +298,8 @@ analyzeBtn.textContent = "Analyze Environment";
 }
 
   
-async function ask() {
+async function ask(event) {
+  if (event) event.preventDefault();
   const questionInput = byId("question");
   const answerBox = byId("answer");
   if (!questionInput || !answerBox) return;
@@ -251,16 +329,22 @@ async function ask() {
       })
     });
 
-    const data = await response.json();
+    const data = await parseJsonOrError(response);
     if (!response.ok) {
       answerBox.textContent = data.error || "Could not generate answer.";
       showToast(data.error || "Could not generate answer.", "error");
       return;
     }
 
-    answerBox.textContent = data.answer || "No answer generated.";
+    followupHistory.push({
+      question,
+      answer: data.answer || "No answer generated."
+    });
+    renderFollowupHistory();
+    questionInput.value = "";
     showToast("Answer generated.", "success");
   } catch (error) {
+    answerBox.hidden = false;
     answerBox.textContent = "An unexpected error occurred while fetching the answer.";
     showToast("An unexpected error occurred while fetching the answer.", "error");
   } finally {
@@ -270,7 +354,8 @@ async function ask() {
   }
 }
 
-async function downloadReport() {
+async function downloadReport(event) {
+  if (event) event.preventDefault();
   if (!latestReportData) {
     showToast("Analyze an image first.", "error");
     return;
@@ -282,7 +367,8 @@ async function downloadReport() {
     diseases: latestReportData.diseases || [],
     preventive_measures: latestReportData.preventive_measures || [],
     health_guidelines: latestReportData.health_guidelines || [],
-    image: latestReportData.image || ""
+    image: latestReportData.image || "",
+    followup_qas: followupHistory
   };
 
   const btn = byId("downloadBtn");
@@ -298,7 +384,8 @@ async function downloadReport() {
     });
 
     if (!response.ok) {
-      showToast("Failed to download report.", "error");
+      const errText = (await response.text()).replace(/\s+/g, " ").trim();
+      showToast(errText || "Failed to download report.", "error");
       return;
     }
 
@@ -330,6 +417,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const analyzeBtn = byId("analyzeBtn");
   const askBtn = byId("askBtn");
   const downloadBtn = byId("downloadBtn");
+  const imageInput = byId("imageInput");
+
+  if (imageInput) imageInput.addEventListener("change", resetAnalysisUI);
 
   if (analyzeBtn) analyzeBtn.addEventListener("click", analyze);
   if (askBtn) askBtn.addEventListener("click", ask);
