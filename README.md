@@ -2,14 +2,13 @@
 
 ## Our Website Demo
 
-
 <p align="center">
   <a href="https://drive.google.com/file/d/1VmDExKHBxS2pdVi3bIv3-bacg2WeTGnq/view?usp=drive_link" target="_blank">
-    <img alt="▶ Watch Demo Video" src="https://img.shields.io/badge/▶️-Watch%20Demo%20Video‑ff69b4?style=for-the-badge&logo=google‑drive&logoColor=white">
+    <img alt="▶ Watch Demo Video" src="https://img.shields.io/badge/%E2%96%B6-Watch%20Demo%20Video‑ff69b4?style=for-the-badge&logo=github&logoColor=white">
   </a>
 </p>
 
-🎬 Click the button above to watch the demo video!  
+🎬 Click the button above to watch the video!
 ## Project Overview
 The **Environmental AI Healthcare System** is an AI-powered platform that analyzes environmental images and generates context-aware public health advisories. It combines computer vision and retrieval-augmented generation (RAG) to classify environmental conditions and provide actionable healthcare guidance through a web interface.
 
