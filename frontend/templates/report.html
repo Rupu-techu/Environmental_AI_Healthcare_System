@@ -23,7 +23,7 @@
       <p>Upload an image to get AI-based environmental health insights.</p>
       <div class="upload-row">
         <input type="file" id="imageInput" accept="image/*">
-        <button class="btn btn-primary" id="analyzeBtn">Analyze Environment</button>
+        <button class="btn btn-primary" id="analyzeBtn" type="button">Analyze Environment</button>
       </div>
     </section>
 
@@ -62,10 +62,11 @@
       <h2>Ask Follow-up Questions</h2>
       <div class="qa-row">
         <input type="text" id="question" placeholder="Ask about this environment and health risk...">
-        <button class="btn btn-secondary" id="askBtn">Ask</button>
+        <button class="btn btn-secondary" id="askBtn" type="button">Ask</button>
       </div>
       <div id="answer" class="answer-box">AI answer will appear here after analysis.</div>
-      <button class="btn btn-primary" id="downloadBtn">Download Report</button>
+      <div id="followupHistory" class="followup-history" hidden></div>
+      <button class="btn btn-primary" id="downloadBtn" type="button">Download Report</button>
     </section>
   </main>
 
