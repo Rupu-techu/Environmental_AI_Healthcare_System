@@ -71,6 +71,16 @@ def _safe_text(value) -> str:
     return str(value).strip()
 
 
+def _strip_markdown(text: str) -> str:
+    text = _safe_text(text)
+    if not text:
+        return ""
+    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
+    text = re.sub(r"__(.*?)__", r"\1", text)
+    text = re.sub(r"`([^`]*)`", r"\1", text)
+    return _safe_text(text)
+
+
 def _normalize_document(doc) -> str:
     if isinstance(doc, str):
         return doc
@@ -394,15 +404,19 @@ def _normalize_followup_answer(raw_text: str, environment_class: str, question: 
         if normalized_line == safe_question_lc:
             continue
         if line.startswith("- ") or line.startswith("* ") or line.startswith("• "):
-            bullets.append(line[2:].strip())
+            cleaned_bullet = _strip_markdown(line[2:].strip())
+            if cleaned_bullet:
+                bullets.append(cleaned_bullet)
             continue
         if re.match(r"^\d+[\).\s]+", line):
             cleaned = re.sub(r"^\d+[\).\s]+", "", line).strip()
             if cleaned:
-                bullets.append(cleaned)
+                cleaned = _strip_markdown(cleaned)
+                if cleaned:
+                    bullets.append(cleaned)
                 continue
         if not summary_candidate and len(line.split()) >= 6 and not line.endswith(":"):
-            summary_candidate = line
+            summary_candidate = _strip_markdown(line)
 
     deduped: List[str] = []
     seen = set()
@@ -424,6 +438,7 @@ def _normalize_followup_answer(raw_text: str, environment_class: str, question: 
     deduped = deduped[:6]
     if not summary_candidate:
         summary_candidate = deduped[0]
+    summary_candidate = _strip_markdown(summary_candidate)
     summary_norm = summary_candidate.strip(" ?.!:").lower()
     if summary_norm == safe_question_lc:
         summary_candidate = deduped[0]
@@ -608,4 +623,3 @@ def answer_followup_question(environment_class: str, question: str) -> str:
         fallback = _fallback_followup_answer(environment_class, question, context_chunks)
         _cache_set(_answer_cache, answer_cache_key, fallback, ANSWER_CACHE_SIZE)
         return fallback
-

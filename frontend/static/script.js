@@ -152,29 +152,48 @@ function formatAnswerForHistory(answerText, askedQuestion = "") {
 
   const lines = text.split(/\r?\n/);
   const cleaned = [];
-  let insideAnswerBlock = false;
+  const seen = new Set();
+  let section = "";
   const normalizedAskedQuestion = askedQuestion.trim().toLowerCase().replace(/[?.!:\s]+$/g, "");
 
   for (const line of lines) {
-    const normalized = line.trim().toLowerCase();
+    const trimmed = line.trim();
+    const normalized = trimmed.toLowerCase();
     if (!normalized) continue;
-    if (normalized === "question:" || normalized === "summary:") continue;
-    if (normalized.startsWith("user question:")) continue;
+
+    if (normalized === "question:") {
+      section = "question";
+      continue;
+    }
     if (normalized === "answer:") {
-      insideAnswerBlock = true;
+      section = "answer";
       continue;
     }
-    if (!insideAnswerBlock && !line.trim().startsWith("-")) {
+    if (normalized === "summary:") {
+      section = "summary";
       continue;
     }
-    const normalizedLine = line.trim().toLowerCase().replace(/[?.!:\s]+$/g, "");
+    if (normalized.startsWith("user question:")) continue;
+
+    if (section && section !== "answer") {
+      continue;
+    }
+
+    const bulletStripped = trimmed.replace(/^[-*•]\s+/, "");
+    const markdownStripped = bulletStripped.replace(/\*\*/g, "").replace(/`/g, "").trim();
+    if (!markdownStripped) continue;
+
+    const normalizedLine = markdownStripped.toLowerCase().replace(/[?.!:\s]+$/g, "");
     if (normalizedAskedQuestion && normalizedLine === normalizedAskedQuestion) {
       continue;
     }
-    if (line.toLowerCase().includes("for your question on")) {
+    if (markdownStripped.toLowerCase().includes("for your question on")) {
       continue;
     }
-    cleaned.push(line);
+
+    if (seen.has(normalizedLine)) continue;
+    seen.add(normalizedLine);
+    cleaned.push(`- ${markdownStripped}`);
   }
 
   return cleaned.join("\n").trim() || "No answer generated.";
