@@ -41,6 +41,7 @@ The system is designed for local deployment and integrates:
 <img width="1906" height="868" alt="about (2)" src="https://github.com/user-attachments/assets/c7e5bf08-fb31-4606-a907-fcb085c813ff" />
 
 
+
 - Environmental image upload and processing
 - CNN-based classification of:
   - Air pollution
@@ -78,12 +79,6 @@ Environmental_AI_Healthcare_System/
 |       |-- home.html
 |       |-- report.html
 |       `-- about.html
-|-- screenshorts/
-|     |-- about.png
-|     |-- faq.png
-|     |-- home.png
-|     |--home_page.png
-|     |-- report.png
 |-- notebooks/
 |    |-- 01_image_data_preprocessing.ipynb
 |    |-- 02_transfer_learning.ipynb
