@@ -35,6 +35,8 @@ The system is designed for local deployment and integrates:
 
 <img width="1919" height="867" alt="report" src="https://github.com/user-attachments/assets/2b3db2b9-f162-47b0-a31b-f661a2d0ff33" />
 
+
+
 - RAG pipeline for grounded health recommendations
 - AI-generated advisory sections:
   - Possible diseases
