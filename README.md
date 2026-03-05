@@ -20,6 +20,25 @@ The system is designed for local deployment and integrates:
 - ReportLab for downloadable PDF report generation
 
 ## Features
+
+## Website Preview
+
+### Home Page
+
+![Home Page](screenshots/home_page.png)
+
+![Home Page](screenshots/faq.png)
+
+### Report Page
+
+![Report Page](screenshots/report.png)
+
+![Report Page](screenshots/home.png)
+
+### About Page
+
+![About Page](screenshots/about.png)
+
 - Environmental image upload and processing
 - CNN-based classification of:
   - Air pollution
