@@ -64,6 +64,10 @@ The system is designed for local deployment and integrates:
 ## Folder Structure
 ```text
 Environmental_AI_Healthcare_System/
+|-- Notebooks/
+|    |-- 01_image_data_preprocessing.ipynb
+|    |-- 02_transfer_learning.ipynb
+|    |-- 03_rag_implementation.ipynb
 |-- backend/
 |   |-- app.py
 |   |-- model_utils.py
@@ -76,10 +80,6 @@ Environmental_AI_Healthcare_System/
 |       |-- home.html
 |       |-- report.html
 |       `-- about.html
-|-- notebooks/
-|    |-- 01_image_data_preprocessing.ipynb
-|    |-- 02_transfer_learning.ipynb
-|    |-- 03_rag_implementation.ipynb
 |-- model/
 |   `-- efficientnet_model.keras
 |-- rag/
