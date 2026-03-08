@@ -405,6 +405,23 @@ button:not(.btn):hover {
   margin-top: 14px;
 }
 
+.camera-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+#video {
+  margin-top: 12px;
+  width: 100%;
+  max-width: 540px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-soft);
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: var(--shadow-sm);
+}
+
 .upload-drop {
   flex: 1;
   min-width: 260px;

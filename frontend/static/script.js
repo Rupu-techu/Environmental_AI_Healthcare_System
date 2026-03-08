@@ -1,6 +1,9 @@
 let currentEnvironmentClass = null;
 let latestReportData = null;
 let followupHistory = [];
+let cameraStream = null;
+let capturedImageBlob = null;
+let capturedImagePreviewUrl = "";
 
 const labels = {
   stagnant_water: "Stagnant Water",
@@ -244,37 +247,75 @@ function updateUploadPreview(file) {
 function handleImageInputChange() {
   const input = byId("imageInput");
   const file = input && input.files ? input.files[0] : null;
+  capturedImageBlob = null;
+  capturedImagePreviewUrl = "";
+  stopCameraStream();
   resetAnalysisUI();
   updateUploadPreview(file || null);
 }
 
-async function analyze(event) {
-  if (event) event.preventDefault();
-  const input = byId("imageInput");
-  const analyzeBtn = byId("analyzeBtn");
+function applyAnalysisResponse(data) {
   const preview = byId("preview");
   const resultsSection = byId("results");
   const followupSection = byId("followupSection");
 
-  if (!input) return;
+  currentEnvironmentClass = data.prediction;
+  latestReportData = data;
+  followupHistory = [];
+  renderFollowupHistory();
 
-  const file = input.files[0];
-  if (!file) {
-    showToast("Please choose an image first.", "error");
-    return;
+  if (resultsSection) resultsSection.hidden = false;
+  if (followupSection) followupSection.hidden = false;
+
+  if (preview) {
+    preview.src = `/uploads/${data.image}?t=${Date.now()}`;
+    preview.hidden = false;
   }
 
-  analyzeBtn.disabled = true;
-  analyzeBtn.textContent = "Analyzing...";
+  const badge = byId("predictionBadge");
+  if (badge) {
+    const label = labels[data.prediction] || data.prediction;
+    const color = badgeColors[data.prediction] || "blue";
+    badge.className = `badge ${color}`;
+    badge.textContent = label;
+  }
+
+  const confidence = byId("confidence");
+  const confidenceBar = byId("confidenceBar");
+
+  const percent = toConfidencePercent(data.confidence);
+  const clampedPercent = Math.max(0, Math.min(100, percent));
+  const displayPercent = clampedPercent.toFixed(2);
+
+  if (confidence) confidence.textContent = `${displayPercent}%`;
+  if (confidenceBar) confidenceBar.style.width = `${clampedPercent}%`;
+
+  renderList("diseases", data.diseases || []);
+  renderList("prevention", data.preventive_measures || []);
+  renderList("guidelines", data.health_guidelines || []);
+
+  const answer = byId("answer");
+  if (answer) {
+    answer.textContent =
+      data.rag_answer || "Analysis complete. Ask a follow-up question below.";
+  }
+}
+
+async function submitImageForAnalysis(formData, loadingLabel, previewUrl) {
+  const analyzeBtn = byId("analyzeBtn");
+  const captureBtn = byId("capture");
+  const preview = byId("preview");
+
+  if (analyzeBtn) {
+    analyzeBtn.disabled = true;
+    analyzeBtn.textContent = loadingLabel;
+  }
+  if (captureBtn) captureBtn.disabled = true;
+  stopCameraStream();
+
   resetAnalysisUI();
-
-  const formData = new FormData();
-  formData.append("image", file);
-
-  let localPreviewUrl = null;
-  if (preview) {
-    localPreviewUrl = URL.createObjectURL(file);
-    preview.src = localPreviewUrl;
+  if (preview && previewUrl) {
+    preview.src = previewUrl;
     preview.hidden = false;
   }
 
@@ -283,7 +324,6 @@ async function analyze(event) {
       method: "POST",
       body: formData
     });
-
     const data = await parseJsonOrError(response);
 
     if (!response.ok) {
@@ -291,60 +331,138 @@ async function analyze(event) {
       return;
     }
 
-    currentEnvironmentClass = data.prediction;
-    latestReportData = data;
-    followupHistory = [];
-    renderFollowupHistory();
-
-    if (resultsSection) resultsSection.hidden = false;
-    if (followupSection) followupSection.hidden = false;
-
-    if (preview) {
-      preview.src = `/uploads/${data.image}?t=${Date.now()}`;
-      preview.hidden = false;
-    }
-
-    const badge = byId("predictionBadge");
-    if (badge) {
-      const label = labels[data.prediction] || data.prediction;
-      const color = badgeColors[data.prediction] || "blue";
-      badge.className = `badge ${color}`;
-      badge.textContent = label;
-    }
-
-    const confidence = byId("confidence");
-    const confidenceBar = byId("confidenceBar");
-
-    const percent = toConfidencePercent(data.confidence);
-    const clampedPercent = Math.max(0, Math.min(100, percent));
-    const displayPercent = clampedPercent.toFixed(2);
-
-    if (confidence) confidence.textContent = `${displayPercent}%`;
-    if (confidenceBar) confidenceBar.style.width = `${clampedPercent}%`;
-
-    renderList("diseases", data.diseases || []);
-    renderList("prevention", data.preventive_measures || []);
-    renderList("guidelines", data.health_guidelines || []);
-
-    const answer = byId("answer");
-    if (answer) {
-      answer.textContent =
-        data.rag_answer || "Analysis complete. Ask a follow-up question below.";
-    }
-
+    applyAnalysisResponse(data);
     showToast("Analysis completed successfully.", "success");
-
   } catch (error) {
     console.error(error);
     showToast("Unexpected error during analysis.", "error");
   } finally {
-    analyzeBtn.disabled = false;
-    analyzeBtn.textContent = "Analyze Environment";
-
-    if (localPreviewUrl) {
-      setTimeout(() => URL.revokeObjectURL(localPreviewUrl), 1000);
+    if (analyzeBtn) {
+      analyzeBtn.disabled = false;
+      analyzeBtn.textContent = "Analyze Environment";
     }
+    if (captureBtn && cameraStream) captureBtn.disabled = false;
   }
+}
+
+function stopCameraStream() {
+  if (!cameraStream) return;
+  cameraStream.getTracks().forEach((track) => track.stop());
+  cameraStream = null;
+
+  const video = byId("video");
+  const captureBtn = byId("capture");
+  if (video) {
+    video.srcObject = null;
+    video.hidden = true;
+  }
+  if (captureBtn) captureBtn.disabled = true;
+}
+
+async function startCamera(event) {
+  if (event) event.preventDefault();
+  const video = byId("video");
+  const captureBtn = byId("capture");
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast("Camera is not supported in this browser.", "error");
+    return;
+  }
+
+  try {
+    stopCameraStream();
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" }
+      });
+    } catch (_cameraPreferenceError) {
+      cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    }
+    if (!video) return;
+    video.srcObject = cameraStream;
+    video.hidden = false;
+    if (captureBtn) captureBtn.disabled = false;
+    showToast("Camera started.", "info");
+  } catch (_error) {
+    showToast("Unable to access camera. Please allow permission.", "error");
+  }
+}
+
+async function captureImage(event) {
+  if (event) event.preventDefault();
+  const video = byId("video");
+  const canvas = byId("canvas");
+  const input = byId("imageInput");
+  const preview = byId("preview");
+
+  if (!video || !canvas || !cameraStream) {
+    showToast("Start camera first.", "error");
+    return;
+  }
+  if (!video.videoWidth || !video.videoHeight) {
+    showToast("Camera is not ready yet. Try again.", "error");
+    return;
+  }
+
+  canvas.width = 224;
+  canvas.height = 224;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    showToast("Failed to capture image.", "error");
+    return;
+  }
+  context.drawImage(video, 0, 0, 224, 224);
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  if (!blob) {
+    showToast("Failed to capture image.", "error");
+    return;
+  }
+
+  if (input) input.value = "";
+  capturedImageBlob = blob;
+  capturedImagePreviewUrl = canvas.toDataURL("image/png");
+  updateUploadPreview(null);
+  resetAnalysisUI();
+  if (preview) {
+    preview.src = capturedImagePreviewUrl;
+    preview.hidden = false;
+  }
+  showToast("Image captured. Click Analyze Environment when ready.", "info");
+}
+
+async function analyze(event) {
+  if (event) event.preventDefault();
+  const input = byId("imageInput");
+  const preview = byId("preview");
+
+  if (!input) return;
+
+  const file = input.files[0];
+  let localPreviewUrl = null;
+  const formData = new FormData();
+  if (file) {
+    if (preview) {
+      localPreviewUrl = URL.createObjectURL(file);
+    }
+    formData.append("image", file, "image.png");
+    capturedImageBlob = null;
+    capturedImagePreviewUrl = "";
+  } else if (capturedImageBlob) {
+    localPreviewUrl = capturedImagePreviewUrl;
+    formData.append("image", capturedImageBlob, "image.png");
+  } else {
+    showToast("Please choose an image or capture one first.", "error");
+    return;
+  }
+
+  await submitImageForAnalysis(formData, "Analyzing...", localPreviewUrl);
+
+  if (file && localPreviewUrl) {
+    setTimeout(() => URL.revokeObjectURL(localPreviewUrl), 1000);
+  }
+  capturedImageBlob = null;
+  capturedImagePreviewUrl = "";
 }
 
   
@@ -468,6 +586,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const askBtn = byId("askBtn");
   const downloadBtn = byId("downloadBtn");
   const imageInput = byId("imageInput");
+  const startCameraBtn = byId("startCamera");
+  const captureBtn = byId("capture");
 
   if (imageInput) {
     imageInput.addEventListener("change", handleImageInputChange);
@@ -475,6 +595,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (analyzeBtn) analyzeBtn.addEventListener("click", analyze);
+  if (startCameraBtn) startCameraBtn.addEventListener("click", startCamera);
+  if (captureBtn) captureBtn.addEventListener("click", captureImage);
   if (askBtn) askBtn.addEventListener("click", ask);
   if (downloadBtn) downloadBtn.addEventListener("click", downloadReport);
 });
+
+window.addEventListener("beforeunload", stopCameraStream);

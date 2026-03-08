@@ -38,6 +38,12 @@
         <input type="file" id="imageInput" accept="image/*">
         <button class="btn btn-primary" id="analyzeBtn" type="button">Analyze Environment</button>
       </div>
+      <div class="camera-row">
+        <button class="btn btn-secondary" id="startCamera" type="button">Start Camera</button>
+        <button class="btn btn-primary" id="capture" type="button" disabled>Capture Image</button>
+      </div>
+      <video id="video" autoplay playsinline hidden></video>
+      <canvas id="canvas" style="display:none;"></canvas>
       <p id="selectedFileName" class="selected-file">No file selected.</p>
       <p class="input-note">Tip: include more environmental context in the frame for better prediction quality.</p>
     </section>
