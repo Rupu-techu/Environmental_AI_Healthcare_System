@@ -26,6 +26,17 @@ The report page is the main analysis interface where users can upload or capture
 Key capabilities:
 
 - Environmental image upload and processing
+- ### Image Upload Analysis
+- Upload environmental images
+- AI-based risk detection
+
+### Live Monitoring and Image Capture
+- Start / Stop live capture
+- Interval control (default 5s)
+- Alert only when class changes
+- Live status updates
+- Persistent disease/prevention information
+
 - CNN-based classification of:
   - Air pollution
   - Garbage / dirty areas
