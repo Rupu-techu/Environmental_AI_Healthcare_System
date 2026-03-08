@@ -41,7 +41,23 @@
       <div class="camera-row">
         <button class="btn btn-secondary" id="startCamera" type="button">Start Camera</button>
         <button class="btn btn-primary" id="capture" type="button" disabled>Capture Image</button>
+        <button class="btn btn-secondary" id="liveMonitorBtn" type="button">Start Live Monitor</button>
+        <label class="live-interval-wrap" for="liveInterval">
+          Interval
+          <select id="liveInterval" aria-label="Live monitor interval">
+            <option value="2000">2s</option>
+            <option value="3000">3s</option>
+            <option value="5000" selected>5s</option>
+            <option value="8000">8s</option>
+          </select>
+        </label>
+        <label class="live-interval-wrap" for="liveAlertMode">
+          <input id="liveAlertMode" type="checkbox" checked>
+          Alert on class change only
+        </label>
       </div>
+      <p id="liveStatus" class="live-status">Live monitor is off.</p>
+      <p id="liveUpdateState" class="live-update-state" hidden></p>
       <video id="video" autoplay playsinline hidden></video>
       <canvas id="canvas" style="display:none;"></canvas>
       <p id="selectedFileName" class="selected-file">No file selected.</p>

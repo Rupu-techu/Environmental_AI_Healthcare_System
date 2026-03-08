@@ -4,6 +4,10 @@ let followupHistory = [];
 let cameraStream = null;
 let capturedImageBlob = null;
 let capturedImagePreviewUrl = "";
+let liveMonitorTimer = null;
+let liveMonitorActive = false;
+let liveMonitorBusy = false;
+let lastLiveMonitorPrediction = null;
 
 const labels = {
   stagnant_water: "Stagnant Water",
@@ -301,7 +305,12 @@ function applyAnalysisResponse(data) {
   }
 }
 
-async function submitImageForAnalysis(formData, loadingLabel, previewUrl) {
+async function submitImageForAnalysis(formData, loadingLabel, previewUrl, options = {}) {
+  const {
+    stopCameraOnStart = true,
+    showSuccessToast = true,
+    preserveCurrentResults = false
+  } = options;
   const analyzeBtn = byId("analyzeBtn");
   const captureBtn = byId("capture");
   const preview = byId("preview");
@@ -311,10 +320,15 @@ async function submitImageForAnalysis(formData, loadingLabel, previewUrl) {
     analyzeBtn.textContent = loadingLabel;
   }
   if (captureBtn) captureBtn.disabled = true;
-  stopCameraStream();
+  if (stopCameraOnStart) stopCameraStream();
 
-  resetAnalysisUI();
-  if (preview && previewUrl) {
+  if (!preserveCurrentResults) {
+    resetAnalysisUI();
+    if (preview && previewUrl) {
+      preview.src = previewUrl;
+      preview.hidden = false;
+    }
+  } else if (preview && previewUrl) {
     preview.src = previewUrl;
     preview.hidden = false;
   }
@@ -328,14 +342,16 @@ async function submitImageForAnalysis(formData, loadingLabel, previewUrl) {
 
     if (!response.ok) {
       showToast(data.error || "Failed to analyze image.", "error");
-      return;
+      return null;
     }
 
     applyAnalysisResponse(data);
-    showToast("Analysis completed successfully.", "success");
+    if (showSuccessToast) showToast("Analysis completed successfully.", "success");
+    return data;
   } catch (error) {
     console.error(error);
     showToast("Unexpected error during analysis.", "error");
+    return null;
   } finally {
     if (analyzeBtn) {
       analyzeBtn.disabled = false;
@@ -346,6 +362,7 @@ async function submitImageForAnalysis(formData, loadingLabel, previewUrl) {
 }
 
 function stopCameraStream() {
+  stopLiveMonitor(false);
   const video = byId("video");
   const captureBtn = byId("capture");
   if (cameraStream) {
@@ -374,6 +391,171 @@ function updateCameraToggleUI(isCameraOn) {
     startCameraBtn.classList.remove("btn-danger");
     startCameraBtn.classList.add("btn-secondary");
   }
+}
+
+function getLiveMonitorIntervalMs() {
+  const intervalSelect = byId("liveInterval");
+  const value = Number(intervalSelect ? intervalSelect.value : 5000);
+  if (!Number.isFinite(value) || value < 1000) return 5000;
+  return value;
+}
+
+function setLiveUpdateState(message, state = "") {
+  const stateEl = byId("liveUpdateState");
+  if (!stateEl) return;
+
+  if (!message) {
+    stateEl.textContent = "";
+    stateEl.hidden = true;
+    stateEl.classList.remove("updating", "success", "error");
+    return;
+  }
+
+  stateEl.hidden = false;
+  stateEl.textContent = message;
+  stateEl.classList.remove("updating", "success", "error");
+  if (state) stateEl.classList.add(state);
+}
+
+function updateLiveMonitorUI(isLiveOn) {
+  const liveBtn = byId("liveMonitorBtn");
+  const statusEl = byId("liveStatus");
+  const intervalSelect = byId("liveInterval");
+  const alertModeToggle = byId("liveAlertMode");
+  if (liveBtn) {
+    if (isLiveOn) {
+      liveBtn.textContent = "Stop Live Monitor";
+      liveBtn.classList.remove("btn-secondary");
+      liveBtn.classList.add("btn-danger");
+    } else {
+      liveBtn.textContent = "Start Live Monitor";
+      liveBtn.classList.remove("btn-danger");
+      liveBtn.classList.add("btn-secondary");
+    }
+  }
+  if (statusEl) {
+    if (isLiveOn) {
+      statusEl.textContent = `Live monitor is active (every ${getLiveMonitorIntervalMs() / 1000}s).`;
+      statusEl.classList.add("active");
+      setLiveUpdateState("Waiting for next live update...");
+    } else {
+      statusEl.textContent = "Live monitor is off.";
+      statusEl.classList.remove("active");
+      setLiveUpdateState("");
+    }
+  }
+  if (intervalSelect) intervalSelect.disabled = isLiveOn;
+  if (alertModeToggle) alertModeToggle.disabled = isLiveOn;
+}
+
+function stopLiveMonitor(showToastMessage = true) {
+  const wasActive = liveMonitorActive;
+  if (liveMonitorTimer) {
+    clearInterval(liveMonitorTimer);
+    liveMonitorTimer = null;
+  }
+  liveMonitorActive = false;
+  liveMonitorBusy = false;
+  updateLiveMonitorUI(false);
+  if (showToastMessage && wasActive) {
+    showToast("Live monitor stopped.", "info");
+  }
+}
+
+function showLiveMonitorPredictionAlert(data) {
+  if (!data || !data.prediction) return;
+  const alertModeToggle = byId("liveAlertMode");
+  const alertOnChangeOnly = alertModeToggle ? alertModeToggle.checked : true;
+  const nextPrediction = data.prediction;
+  const nextLabel = labels[nextPrediction] || nextPrediction;
+
+  if (alertOnChangeOnly && lastLiveMonitorPrediction === nextPrediction) {
+    return;
+  }
+
+  if (nextPrediction === "hygienic_environment") {
+    showToast(`Live status changed: ${nextLabel}.`, "success");
+  } else {
+    showToast(`Live alert: ${nextLabel} detected.`, "error");
+  }
+  lastLiveMonitorPrediction = nextPrediction;
+}
+
+async function analyzeCurrentCameraFrame() {
+  const video = byId("video");
+  const canvas = byId("canvas");
+  if (!video || !canvas || !cameraStream) return false;
+  if (!video.videoWidth || !video.videoHeight) return false;
+
+  canvas.width = 224;
+  canvas.height = 224;
+  const context = canvas.getContext("2d");
+  if (!context) return false;
+  context.drawImage(video, 0, 0, 224, 224);
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  if (!blob) return false;
+
+  const formData = new FormData();
+  formData.append("image", blob, "live-monitor.png");
+  const previewUrl = canvas.toDataURL("image/png");
+
+  const data = await submitImageForAnalysis(formData, "Monitoring...", previewUrl, {
+    stopCameraOnStart: false,
+    showSuccessToast: false,
+    preserveCurrentResults: true
+  });
+  return data;
+}
+
+async function runLiveMonitorTick() {
+  if (!liveMonitorActive || liveMonitorBusy) return;
+  liveMonitorBusy = true;
+  setLiveUpdateState("Live updating...", "updating");
+  try {
+    const data = await analyzeCurrentCameraFrame();
+    if (data) {
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, "0");
+      const mm = String(now.getMinutes()).padStart(2, "0");
+      const ss = String(now.getSeconds()).padStart(2, "0");
+      setLiveUpdateState(`Last updated at ${hh}:${mm}:${ss}.`, "success");
+    } else {
+      setLiveUpdateState("Live update failed. Retrying on next tick.", "error");
+    }
+    showLiveMonitorPredictionAlert(data);
+  } finally {
+    liveMonitorBusy = false;
+  }
+}
+
+async function toggleLiveMonitor(event) {
+  if (event) event.preventDefault();
+  if (liveMonitorActive) {
+    stopLiveMonitor();
+    return;
+  }
+
+  if (!cameraStream) {
+    await startCamera();
+  }
+  if (!cameraStream) {
+    showToast("Start camera first to use live monitor.", "error");
+    return;
+  }
+
+  liveMonitorActive = true;
+  lastLiveMonitorPrediction = null;
+  updateLiveMonitorUI(true);
+  showToast("Live monitor started.", "info");
+
+  await runLiveMonitorTick();
+  if (!liveMonitorActive) return;
+
+  const intervalMs = getLiveMonitorIntervalMs();
+  liveMonitorTimer = setInterval(() => {
+    runLiveMonitorTick();
+  }, intervalMs);
 }
 
 async function startCamera(event) {
@@ -618,6 +800,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const imageInput = byId("imageInput");
   const startCameraBtn = byId("startCamera");
   const captureBtn = byId("capture");
+  const liveMonitorBtn = byId("liveMonitorBtn");
+  const liveInterval = byId("liveInterval");
 
   if (imageInput) {
     imageInput.addEventListener("change", handleImageInputChange);
@@ -629,10 +813,22 @@ document.addEventListener("DOMContentLoaded", () => {
     updateCameraToggleUI(false);
     startCameraBtn.addEventListener("click", toggleCamera);
   }
+  updateLiveMonitorUI(false);
   if (captureBtn) captureBtn.disabled = true;
   if (captureBtn) captureBtn.addEventListener("click", captureImage);
+  if (liveMonitorBtn) liveMonitorBtn.addEventListener("click", toggleLiveMonitor);
+  if (liveInterval) {
+    liveInterval.addEventListener("change", () => {
+      if (!liveMonitorActive) {
+        updateLiveMonitorUI(false);
+      }
+    });
+  }
   if (askBtn) askBtn.addEventListener("click", ask);
   if (downloadBtn) downloadBtn.addEventListener("click", downloadReport);
 });
 
-window.addEventListener("beforeunload", stopCameraStream);
+window.addEventListener("beforeunload", () => {
+  stopLiveMonitor(false);
+  stopCameraStream();
+});

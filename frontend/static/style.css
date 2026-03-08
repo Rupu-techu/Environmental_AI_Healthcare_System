@@ -434,6 +434,63 @@ button:not(.btn):hover {
   gap: 12px;
   flex-wrap: wrap;
   margin-top: 12px;
+  align-items: center;
+}
+
+.live-interval-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-soft);
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+#liveInterval {
+  border-radius: 10px;
+  border: 1px solid var(--border-soft);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 0.9rem;
+}
+
+#liveAlertMode {
+  accent-color: var(--primary);
+}
+
+.live-status {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.live-status.active {
+  color: var(--primary-dark);
+}
+
+.live-update-state {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.live-update-state.updating {
+  color: #156f80;
+}
+
+.live-update-state.success {
+  color: #1b7a57;
+}
+
+.live-update-state.error {
+  color: #b23a3a;
 }
 
 #video {
